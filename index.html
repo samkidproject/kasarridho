@@ -5,59 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KasMasjid Ar-Ridho</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .animate-shake {
-            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-        }
-        @keyframes shake {
-            10%, 90% { transform: translate3d(-1px, 0, 0); }
-            20%, 80% { transform: translate3d(2px, 0, 0); }
-            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-            40%, 60% { transform: translate3d(4px, 0, 0); }
-        }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; padding: 0; }
+        .active-tap:active { transform: scale(0.95); opacity: 0.8; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade { animation: fadeIn 0.3s ease-out forwards; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 min-h-screen">
+<body class="bg-slate-50 text-slate-900 min-h-screen border-t-4 border-emerald-800">
     <div id="app"></div>
-
-    <!-- Firebase SDKs -->
+    
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import React, { useState, useEffect, useMemo } from "https://esm.sh/react@18.2.0";
         import ReactDOM from "https://esm.sh/react-dom@18.2.0/client";
         import * as LucideIcons from "https://esm.sh/lucide-react@0.263.1";
 
-        // Pastikan variabel ini terdefinisi di lingkungan hosting Anda
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "",
-            authDomain: "",
-            projectId: "",
-            storageBucket: "",
-            messagingSenderId: "",
-            appId: ""
+        const firebaseConfig = {
+            apiKey: "AIzaSyBlozNEhjicXQlywLqNwQ8atr1uEPJU9yE",
+            authDomain: "kas-masjidarridho.firebaseapp.com",
+            projectId: "kas-masjidarridho",
+            storageBucket: "kas-masjidarridho.firebasestorage.app",
+            messagingSenderId: "741992266897",
+            appId: "1:741992266897:web:0e3bee0cd27f721b041330",
+            measurementId: "G-HL57VKSNDE"
         };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'kas-masjid-app';
+        const appId = "kas-masjid-arridho"; 
         const ADMIN_PASSWORD = "999";
 
         function App() {
             const [user, setUser] = useState(null);
             const [view, setView] = useState('public'); 
             const [inputPass, setInputPass] = useState('');
-            const [authError, setAuthError] = useState(false);
             const [transactions, setTransactions] = useState([]);
             const [loading, setLoading] = useState(true);
             const [logoClicks, setLogoClicks] = useState(0);
-            const [editingId, setEditingId] = useState(null);
-            const [showPhotoModal, setShowPhotoModal] = useState(null);
+            const [showPhoto, setShowPhoto] = useState(null);
             const [currentTime, setCurrentTime] = useState(new Date());
+            const [editingId, setEditingId] = useState(null);
             
             const [formData, setFormData] = useState({
                 title: '', amount: '', type: 'income', method: 'tunai',
@@ -70,65 +64,27 @@
             }, []);
 
             useEffect(() => {
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (err) { 
-                        console.error("Auth Error:", err);
-                        // Jika gagal auth, tetap matikan loading agar UI muncul
-                        setLoading(false); 
-                    }
-                };
-                initAuth();
-                const unsubscribe = onAuthStateChanged(auth, setUser);
-                return () => unsubscribe();
+                signInAnonymously(auth).catch(() => setLoading(false));
+                onAuthStateChanged(auth, (u) => {
+                    setUser(u);
+                    if (u) setLoading(false);
+                });
             }, []);
 
             useEffect(() => {
                 if (!user) return;
                 const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'transactions'));
-                const unsubscribe = onSnapshot(q, (snapshot) => {
+                return onSnapshot(q, (snapshot) => {
                     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    const sorted = [...data].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                    setTransactions(sorted);
-                    setLoading(false);
-                }, (error) => {
-                    console.error("Firestore Error:", error);
-                    setLoading(false);
+                    setTransactions(data.sort((a, b) => new Date(b.date) - new Date(a.date) || b.timestamp - a.timestamp));
                 });
-                return () => unsubscribe();
             }, [user]);
 
             const stats = useMemo(() => {
                 const income = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 const expense = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
-                
-                const tunaiIn = transactions.filter(t => t.type === 'income' && t.method === 'tunai').reduce((acc, curr) => acc + Number(curr.amount), 0);
-                const tunaiOut = transactions.filter(t => t.type === 'expense' && t.method === 'tunai').reduce((acc, curr) => acc + Number(curr.amount), 0);
-                const rekIn = transactions.filter(t => t.type === 'income' && t.method === 'rekening').reduce((acc, curr) => acc + Number(curr.amount), 0);
-                const rekOut = transactions.filter(t => t.type === 'expense' && t.method === 'rekening').reduce((acc, curr) => acc + Number(curr.amount), 0);
-
-                return { 
-                    income, expense, balance: income - expense,
-                    tunai: tunaiIn - tunaiOut,
-                    rekening: rekIn - rekOut
-                };
+                return { income, expense, balance: income - expense };
             }, [transactions]);
-
-            const handleLogoClick = () => {
-                setLogoClicks(prev => {
-                    if (prev + 1 >= 5) {
-                        setView('auth');
-                        return 0;
-                    }
-                    return prev + 1;
-                });
-                setTimeout(() => setLogoClicks(0), 3000);
-            };
 
             const handleFileChange = (e) => {
                 const file = e.target.files[0];
@@ -139,211 +95,212 @@
                 }
             };
 
-            const handleDelete = async (id) => {
-                if (!window.confirm("Hapus data ini secara permanen?")) return;
-                try {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'transactions', id));
-                } catch (err) { console.error("Gagal hapus:", err); }
-            };
-
-            const handleEditClick = (t) => {
-                setEditingId(t.id);
-                setFormData({
-                    title: t.title, amount: t.amount, type: t.type, method: t.method || 'tunai',
-                    date: t.date, photo: t.photo || null
-                });
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            };
-
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                if (!user) return;
                 try {
-                    const now = new Date();
                     const payload = {
                         ...formData,
                         amount: Number(formData.amount),
-                        time: now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-                        timestamp: now.getTime(),
-                        updatedAt: now.toISOString()
+                        timestamp: Date.now()
                     };
 
                     if (editingId) {
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'transactions', editingId), payload);
                         setEditingId(null);
                     } else {
-                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'transactions'), {
-                            ...payload, createdAt: now.toISOString(), uid: user.uid
-                        });
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'transactions'), payload);
                     }
+                    
                     setFormData({ title: '', amount: '', type: 'income', method: 'tunai', date: new Date().toISOString().split('T')[0], photo: null });
-                } catch (err) { console.error("Gagal simpan:", err); }
+                    setView('admin');
+                } catch (err) { alert("Gagal menyimpan"); }
+            };
+
+            const handleEdit = (t) => {
+                setEditingId(t.id);
+                setFormData({
+                    title: t.title,
+                    amount: t.amount,
+                    type: t.type,
+                    method: t.method || 'tunai',
+                    date: t.date,
+                    photo: t.photo || null
+                });
+                setView('form');
+            };
+
+            const handleDelete = async (id) => {
+                if (confirm("Hapus transaksi ini?")) {
+                    try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'transactions', id)); } catch (err) { alert("Gagal menghapus"); }
+                }
             };
 
             const formatIDR = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
             const Icon = ({ name, ...props }) => React.createElement(LucideIcons[name] || LucideIcons.HelpCircle, props);
 
-            if (loading) return (
-                React.createElement('div', { className: "flex flex-col items-center justify-center min-h-screen bg-emerald-50" },
-                    React.createElement('div', { className: "w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mb-4" }),
-                    React.createElement('p', { className: "text-[10px] font-extrabold uppercase tracking-widest text-emerald-800" }, "Sinkronisasi...")
-                )
-            );
+            if (loading) return React.createElement('div', { className: "h-screen flex items-center justify-center bg-emerald-50 text-emerald-800 font-bold" }, "Memuat Database...");
 
-            return React.createElement('div', { className: "pb-20" },
-                showPhotoModal && React.createElement('div', { 
-                    className: "fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4",
-                    onClick: () => setShowPhotoModal(null)
-                },
-                    React.createElement('img', { src: showPhotoModal, className: "max-w-full max-h-full rounded-lg shadow-2xl" })
+            return React.createElement('div', { className: "pb-24" },
+                showPhoto && React.createElement('div', { 
+                    className: "fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4",
+                    onClick: () => setShowPhoto(null)
+                }, 
+                    React.createElement('img', { src: showPhoto, className: "max-w-full max-h-full rounded-xl" }),
+                    React.createElement('button', { className: "absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full" }, React.createElement(Icon, { name: 'X', size: 24 }))
                 ),
 
-                React.createElement('nav', { className: "bg-emerald-800 text-white p-5 sticky top-0 z-50 shadow-md" },
-                    React.createElement('div', { className: "max-w-md mx-auto flex justify-between items-center" },
-                        React.createElement('div', { onClick: handleLogoClick, className: "cursor-pointer" },
-                            React.createElement('h1', { className: "font-extrabold text-xl tracking-tighter flex items-center gap-2" }, 
-                                React.createElement(Icon, { name: 'Wallet', size: 20, className: "text-emerald-300" }), "KasMasjid"
-                            ),
-                            React.createElement('p', { className: "text-[9px] font-bold opacity-70 uppercase" }, "Ar-Ridho Kejati Lampung")
-                        ),
-                        view === 'admin' && React.createElement('button', { 
-                            onClick: () => { setView('public'); setEditingId(null); },
-                            className: "bg-rose-500 px-4 py-2 rounded-full text-[9px] font-extrabold uppercase"
-                        }, "Selesai")
-                    )
+                React.createElement('nav', { className: "bg-emerald-800 text-white p-5 sticky top-0 z-50 flex justify-between items-center shadow-md" },
+                    React.createElement('div', { onClick: () => setLogoClicks(c => c + 1), className: "cursor-pointer active-tap" },
+                        React.createElement('h1', { className: "font-extrabold text-xl leading-tight" }, "KasMasjid Ar-Ridho"),
+                        React.createElement('p', { className: "text-[9px] font-bold opacity-70 tracking-widest uppercase" }, "Kejati Lampung")
+                    ),
+                    (logoClicks >= 5 || view === 'admin' || view === 'form') && React.createElement('button', { 
+                        onClick: () => {
+                            if (view === 'admin' || view === 'form') { setView('public'); setLogoClicks(0); }
+                            else { setView('auth'); }
+                        }, 
+                        className: "bg-white text-emerald-800 px-4 py-2 rounded-xl text-[10px] font-extrabold shadow-sm active-tap" 
+                    }, view === 'admin' || view === 'form' ? "KELUAR" : "ADMIN")
                 ),
 
                 React.createElement('main', { className: "max-w-md mx-auto p-5 space-y-6" },
-                    // Widget Jam dan Tanggal (Harus muncul di Publik & Admin)
-                    React.createElement('div', { className: "bg-white p-6 rounded-[2.5rem] shadow-sm text-center border border-slate-100" },
-                        React.createElement('p', { className: "text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1" }, 
-                            currentTime.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                    
+                    React.createElement('div', { className: "bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center text-center animate-fade" },
+                        React.createElement('div', { className: "flex items-center gap-2 mb-1" },
+                            React.createElement(Icon, { name: 'Calendar', size: 12, className: "text-emerald-600" }),
+                            React.createElement('span', { className: "text-[10px] font-black text-slate-400 uppercase tracking-widest" }, 
+                                currentTime.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                            )
                         ),
-                        React.createElement('div', { className: "text-4xl font-extrabold text-emerald-800 tracking-tighter" }, 
-                            currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-                            React.createElement('span', { className: "text-2xl opacity-40 mx-1" }, ":"),
-                            React.createElement('span', { className: "text-2xl opacity-60" }, currentTime.toLocaleTimeString('id-ID', { second: '2-digit' }))
+                        React.createElement('div', { className: "text-3xl font-black text-emerald-900 tracking-tighter" }, 
+                            currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                         )
                     ),
 
+                    // KARTU SALDO DENGAN TOTAL MASUK & KELUAR
                     React.createElement('div', { className: "bg-emerald-900 rounded-[3rem] p-8 text-white shadow-2xl relative overflow-hidden" },
-                        React.createElement('p', { className: "text-[10px] font-extrabold uppercase tracking-[0.3em] text-emerald-300 mb-2 opacity-80" }, "Total Kas Masjid"),
-                        React.createElement('h2', { className: "text-4xl font-extrabold mb-8 tracking-tighter" }, formatIDR(stats.balance)),
-                        React.createElement('div', { className: "grid grid-cols-2 gap-3" },
-                            React.createElement('div', { className: "bg-white/10 p-4 rounded-3xl" },
-                                React.createElement('p', { className: "text-[8px] font-bold uppercase opacity-60 mb-1" }, "Masuk"),
-                                React.createElement('p', { className: "text-sm font-bold" }, formatIDR(stats.income))
+                        React.createElement('div', { className: "relative z-10" },
+                            React.createElement('p', { className: "text-[10px] uppercase tracking-[0.2em] text-emerald-300 opacity-80 font-bold" }, "Total Saldo Kas"),
+                            React.createElement('h2', { className: "text-4xl font-extrabold my-4 tabular-nums" }, formatIDR(stats.balance)),
+                            
+                            React.createElement('div', { className: "grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-white/10" },
+                                React.createElement('div', null,
+                                    React.createElement('p', { className: "text-[8px] font-bold uppercase text-emerald-300/60 tracking-wider mb-1" }, "Total Masuk"),
+                                    React.createElement('p', { className: "text-sm font-bold" }, "+" + formatIDR(stats.income))
+                                ),
+                                React.createElement('div', { className: "text-right" },
+                                    React.createElement('p', { className: "text-[8px] font-bold uppercase text-emerald-300/60 tracking-wider mb-1" }, "Total Keluar"),
+                                    React.createElement('p', { className: "text-sm font-bold" }, "-" + formatIDR(stats.expense))
+                                )
                             ),
-                            React.createElement('div', { className: "bg-black/10 p-4 rounded-3xl text-right" },
-                                React.createElement('p', { className: "text-[8px] font-bold uppercase opacity-60 mb-1" }, "Keluar"),
-                                React.createElement('p', { className: "text-sm font-bold" }, formatIDR(stats.expense))
-                            )
-                        )
+
+                            view === 'admin' && React.createElement('button', { 
+                                onClick: () => { setEditingId(null); setFormData({ title:'', amount:'', type:'income', method:'tunai', date: new Date().toISOString().split('T')[0], photo:null }); setView('form'); }, 
+                                className: "mt-8 w-full bg-emerald-500 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg active-tap" 
+                            }, "+ CATAT TRANSAKSI")
+                        ),
+                        React.createElement('div', { className: "absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-3xl" })
                     ),
 
-                    view === 'admin' ? React.createElement('div', { className: "space-y-8" },
-                        // Ringkasan Tunai & Rekening Khusus Admin
-                        React.createElement('div', { className: "grid grid-cols-2 gap-4" },
-                            React.createElement('div', { className: "bg-white p-5 rounded-[2rem] border border-emerald-100 shadow-sm" },
-                                React.createElement('div', { className: "flex items-center gap-2 mb-2" },
-                                    React.createElement(Icon, { name: 'Banknote', size: 14, className: "text-emerald-600" }),
-                                    React.createElement('span', { className: "text-[9px] font-extrabold text-slate-400 uppercase" }, "Tunai")
-                                ),
-                                React.createElement('p', { className: "text-sm font-extrabold text-slate-800" }, formatIDR(stats.tunai))
-                            ),
-                            React.createElement('div', { className: "bg-white p-5 rounded-[2rem] border border-emerald-100 shadow-sm" },
-                                React.createElement('div', { className: "flex items-center gap-2 mb-2" },
-                                    React.createElement(Icon, { name: 'CreditCard', size: 14, className: "text-emerald-600" }),
-                                    React.createElement('span', { className: "text-[9px] font-extrabold text-slate-400 uppercase" }, "Rekening")
-                                ),
-                                React.createElement('p', { className: "text-sm font-extrabold text-slate-800" }, formatIDR(stats.rekening))
-                            )
-                        ),
-
-                        React.createElement('div', { className: "bg-white p-6 rounded-[2.5rem] shadow-lg border border-slate-100" },
-                            React.createElement('div', { className: "flex justify-between items-center mb-6" },
-                                React.createElement('h3', { className: "text-[10px] font-extrabold uppercase flex items-center gap-2" }, 
-                                    React.createElement(Icon, { name: editingId ? 'Pencil' : 'PlusCircle', size: 14, className: "text-emerald-600" }), editingId ? "Koreksi Data" : "Input Transaksi"
-                                ),
-                                editingId && React.createElement('button', { 
-                                    onClick: () => { setEditingId(null); setFormData({title: '', amount: '', type: 'income', method: 'tunai', date: new Date().toISOString().split('T')[0], photo: null}); },
-                                    className: "text-rose-500 text-[9px] font-bold uppercase"
-                                }, "Batal")
-                            ),
-                            React.createElement('form', { onSubmit: handleSubmit, className: "space-y-4" },
-                                React.createElement('div', { className: "flex bg-slate-100 p-1 rounded-2xl" },
-                                    React.createElement('button', { type: 'button', onClick: () => setFormData({...formData, type: 'income'}), className: `flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase ${formData.type === 'income' ? 'bg-white shadow text-emerald-700' : 'text-slate-400'}` }, "Masuk"),
-                                    React.createElement('button', { type: 'button', onClick: () => setFormData({...formData, type: 'expense'}), className: `flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase ${formData.type === 'expense' ? 'bg-white shadow text-rose-700' : 'text-slate-400'}` }, "Keluar")
-                                ),
-                                React.createElement('input', { required: true, placeholder: "Keterangan", className: "w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border border-slate-100", value: formData.title, onChange: e => setFormData({...formData, title: e.target.value}) }),
-                                React.createElement('input', { required: true, type: 'number', placeholder: "Nominal", className: "w-full p-4 bg-slate-50 rounded-2xl text-lg font-extrabold border border-slate-100", value: formData.amount, onChange: e => setFormData({...formData, amount: e.target.value}) }),
-                                React.createElement('input', { required: true, type: 'date', className: "w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border border-slate-100", value: formData.date, onChange: e => setFormData({...formData, date: e.target.value}) }),
-                                React.createElement('div', { className: "relative group" },
-                                    React.createElement('label', { className: "flex flex-col items-center justify-center w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-emerald-300 transition-colors bg-slate-50" },
-                                        formData.photo ? 
-                                            React.createElement('div', { className: "flex items-center gap-3 w-full" },
-                                                React.createElement('img', { src: formData.photo, className: "w-10 h-10 object-cover rounded-lg" }),
-                                                React.createElement('p', { className: "text-[10px] font-bold text-emerald-600" }, "Foto Bukti Terlampir")
-                                            ) :
-                                            React.createElement('div', { className: "flex items-center gap-3" },
-                                                React.createElement(Icon, { name: 'Camera', size: 18, className: "text-slate-400" }),
-                                                React.createElement('p', { className: "text-[10px] font-bold text-slate-400 uppercase" }, "Upload Bukti Foto")
-                                            ),
-                                        React.createElement('input', { type: 'file', accept: "image/*", className: "hidden", onChange: handleFileChange })
-                                    )
-                                ),
-                                React.createElement('div', { className: "flex gap-3" },
-                                    React.createElement('button', { type: 'button', onClick: () => setFormData({...formData, method: 'tunai'}), className: `flex-1 p-4 rounded-2xl border-2 text-[10px] font-extrabold uppercase flex items-center justify-center gap-2 ${formData.method === 'tunai' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-50 text-slate-300'}` }, React.createElement(Icon, { name: 'Banknote', size: 16 }), "Tunai"),
-                                    React.createElement('button', { type: 'button', onClick: () => setFormData({...formData, method: 'rekening'}), className: `flex-1 p-4 rounded-2xl border-2 text-[10px] font-extrabold uppercase flex items-center justify-center gap-2 ${formData.method === 'rekening' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-50 text-slate-300'}` }, React.createElement(Icon, { name: 'CreditCard', size: 16 }), "Rekening")
-                                ),
-                                React.createElement('button', { type: 'submit', className: "w-full py-5 bg-emerald-700 text-white rounded-[2rem] text-[11px] font-extrabold uppercase shadow-xl" }, editingId ? "Update" : "Simpan")
-                            )
-                        ),
-                        React.createElement('div', { className: "space-y-4" },
-                            React.createElement('p', { className: "text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-4" }, "Log Admin"),
-                            transactions.map(t => React.createElement('div', { key: t.id, className: "bg-white p-5 rounded-[2rem] border border-slate-100 flex justify-between items-center" },
-                                React.createElement('div', { className: "min-w-0" },
-                                    React.createElement('p', { className: "font-extrabold text-sm truncate" }, t.title),
-                                    React.createElement('p', { className: "text-[9px] font-bold text-slate-400" }, `${t.date} • ${t.method}`)
-                                ),
-                                React.createElement('div', { className: "flex items-center gap-2" },
-                                    t.photo && React.createElement('button', { onClick: () => setShowPhotoModal(t.photo), className: "p-2 bg-emerald-50 text-emerald-600 rounded-xl" }, React.createElement(Icon, { name: 'Image', size: 14 })),
-                                    React.createElement('button', { onClick: () => handleEditClick(t), className: "p-2 bg-amber-50 text-amber-500 rounded-xl" }, React.createElement(Icon, { name: 'Pencil', size: 14 })),
-                                    React.createElement('button', { onClick: () => handleDelete(t.id), className: "p-2 bg-rose-50 text-rose-500 rounded-xl" }, React.createElement(Icon, { name: 'Trash2', size: 14 }))
-                                )
-                            ))
-                        )
-                    ) : 
                     React.createElement('div', { className: "space-y-4" },
-                        React.createElement('h3', { className: "text-[10px] font-extrabold uppercase tracking-[0.2em] px-4 text-slate-400" }, "Mutasi Terakhir"),
-                        transactions.map(t => React.createElement('div', { key: t.id, className: "bg-white p-6 rounded-[2.5rem] border border-slate-100 flex justify-between items-center" },
-                            React.createElement('div', { className: "flex items-center gap-4 min-w-0" },
-                                React.createElement('div', { className: `p-3 rounded-2xl ${t.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}` }, 
-                                    t.method === 'rekening' ? React.createElement(Icon, { name: 'CreditCard', size: 20 }) : React.createElement(Icon, { name: 'Banknote', size: 20 })
+                        React.createElement('div', { className: "flex justify-between items-center px-2" },
+                            React.createElement('h3', { className: "text-[10px] font-extrabold uppercase text-slate-400 tracking-widest" }, "Riwayat Kas"),
+                            React.createElement('span', { className: "text-[9px] bg-slate-200 px-2 py-0.5 rounded-full font-bold text-slate-500" }, transactions.length + " Transaksi")
+                        ),
+                        transactions.map(t => React.createElement('div', { key: t.id, className: "bg-white p-5 rounded-[2.2rem] shadow-sm flex justify-between items-center border border-slate-100 animate-fade" },
+                            React.createElement('div', { className: "flex items-center gap-4" },
+                                React.createElement('div', { className: `p-3.5 rounded-2xl ${t.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}` },
+                                    React.createElement(Icon, { name: t.method === 'rekening' ? 'CreditCard' : 'Banknote', size: 18 })
                                 ),
-                                React.createElement('div', { className: "min-w-0" },
-                                    React.createElement('p', { className: "font-extrabold text-sm truncate" }, t.title),
-                                    React.createElement('p', { className: "text-[9px] font-bold text-slate-400" }, `${new Date(t.date).toLocaleDateString('id-ID', {day:'numeric', month:'short'})} • ${t.time || '--:--'}`)
+                                React.createElement('div', null,
+                                    React.createElement('p', { className: "font-extrabold text-sm text-slate-800" }, t.title),
+                                    React.createElement('p', { className: "text-[9px] text-slate-400 font-bold uppercase" }, 
+                                        new Date(t.date).toLocaleDateString('id-ID', { day:'2-digit', month:'short' }) + " • " + (t.method || 'tunai')
+                                    )
                                 )
                             ),
-                            React.createElement('p', { className: `font-extrabold text-sm ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}` }, (t.type === 'income' ? '+' : '-') + formatIDR(t.amount))
+                            React.createElement('div', { className: "flex items-center gap-3" },
+                                React.createElement('div', { className: "text-right" },
+                                    React.createElement('p', { className: `font-extrabold text-sm ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}` }, (t.type === 'income' ? '+' : '-') + formatIDR(t.amount)),
+                                    t.photo && React.createElement('button', { 
+                                        onClick: () => setShowPhoto(t.photo),
+                                        className: "text-[9px] font-black text-emerald-600 underline" 
+                                    }, "Bukti")
+                                ),
+                                view === 'admin' && React.createElement('div', { className: "flex flex-col gap-1 ml-2" },
+                                    React.createElement('button', { onClick: () => handleEdit(t), className: "p-2 bg-amber-50 text-amber-500 rounded-lg active-tap" }, React.createElement(Icon, { name: 'Pencil', size: 12 })),
+                                    React.createElement('button', { onClick: () => handleDelete(t.id), className: "p-2 bg-rose-50 text-rose-400 rounded-lg active-tap" }, React.createElement(Icon, { name: 'Trash2', size: 12 }))
+                                )
+                            )
                         ))
                     )
                 ),
 
-                view === 'auth' && React.createElement('div', { className: "fixed inset-0 z-[100] bg-emerald-950/90 backdrop-blur flex items-center justify-center p-6" },
-                    React.createElement('div', { className: "bg-white w-full max-w-xs p-8 rounded-[3rem] text-center" },
-                        React.createElement('div', { className: "w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4" }, React.createElement(Icon, { name: 'Lock', className: "text-emerald-600" })),
-                        React.createElement('h2', { className: "font-extrabold text-xl mb-6" }, "Akses Pengurus"),
-                        React.createElement('form', { onSubmit: (e) => { e.preventDefault(); if(inputPass === ADMIN_PASSWORD){ setView('admin'); setInputPass(''); } else { setAuthError(true); } } },
-                            React.createElement('input', { 
-                                type: 'password', autoFocus: true, placeholder: "••••", 
-                                className: `w-full p-4 bg-slate-50 border-2 rounded-2xl text-center text-3xl font-extrabold tracking-widest outline-none mb-4 ${authError ? 'border-rose-500 animate-shake' : 'border-slate-100'}`,
-                                value: inputPass, onChange: (e) => { setInputPass(e.target.value); setAuthError(false); }
-                            }),
-                            React.createElement('button', { type: 'submit', className: "w-full py-4 bg-emerald-700 text-white rounded-2xl font-extrabold uppercase text-[10px] tracking-widest" }, "Masuk"),
-                            React.createElement('button', { type: 'button', onClick: () => setView('public'), className: "mt-4 text-[9px] font-bold text-slate-400 uppercase" }, "Batal")
+                // FORM DENGAN PILIHAN TUNAI/REKENING
+                view === 'form' && React.createElement('div', { className: "fixed inset-0 bg-emerald-950/70 backdrop-blur-sm z-[100] p-6 flex items-center justify-center" },
+                    React.createElement('form', { onSubmit: handleSubmit, className: "bg-white p-8 rounded-[3rem] w-full max-w-sm space-y-4 shadow-2xl animate-fade overflow-y-auto max-h-[90vh]" },
+                        React.createElement('div', { className: "text-center mb-2" },
+                            React.createElement('h3', { className: "font-black text-xl text-emerald-800" }, editingId ? "Edit Transaksi" : "Catat Transaksi"),
+                        ),
+                        React.createElement('div', { className: "space-y-4" },
+                            // Jenis: Masuk / Keluar
+                            React.createElement('div', { className: "flex gap-2 p-1.5 bg-slate-100 rounded-2xl" },
+                                ['income', 'expense'].map(type => React.createElement('button', {
+                                    key: type, type: 'button',
+                                    onClick: () => setFormData({...formData, type}),
+                                    className: `flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${formData.type === type ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`
+                                }, type === 'income' ? 'Uang Masuk' : 'Uang Keluar'))
+                            ),
+                            
+                            // Metode: Tunai / Rekening
+                            React.createElement('div', { className: "grid grid-cols-2 gap-2" },
+                                ['tunai', 'rekening'].map(m => React.createElement('button', {
+                                    key: m, type: 'button',
+                                    onClick: () => setFormData({...formData, method: m}),
+                                    className: `py-3 rounded-2xl border-2 font-black text-[10px] uppercase flex items-center justify-center gap-2 ${formData.method === m ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-50 text-slate-300'}`
+                                }, React.createElement(Icon, { name: m === 'rekening' ? 'CreditCard' : 'Banknote', size: 14 }), m))
+                            ),
+
+                            React.createElement('input', { required: true, placeholder: "Keterangan (Contoh: Infaq Jumat)", className: "w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-emerald-100", value: formData.title, onChange: e => setFormData({...formData, title: e.target.value}) }),
+                            React.createElement('input', { required: true, type: 'number', placeholder: "Nominal (Rp)", className: "w-full p-4 bg-slate-50 rounded-2xl font-black text-xl outline-none focus:ring-2 ring-emerald-100", value: formData.amount, onChange: e => setFormData({...formData, amount: e.target.value}) }),
+                            React.createElement('input', { required: true, type: 'date', className: "w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm outline-none", value: formData.date, onChange: e => setFormData({...formData, date: e.target.value}) }),
+                            
+                            React.createElement('div', { className: "relative border-2 border-dashed border-emerald-100 rounded-2xl p-4 text-center bg-emerald-50/30" },
+                                !formData.photo ? React.createElement('label', { className: "cursor-pointer flex flex-col items-center gap-1" },
+                                    React.createElement(Icon, { name: 'Camera', className: "text-emerald-600 mb-1" }),
+                                    React.createElement('span', { className: "text-[9px] font-black text-emerald-800 uppercase" }, "UNGGAH BUKTI FOTO"),
+                                    React.createElement('input', { type: 'file', accept: 'image/*', className: "hidden", onChange: handleFileChange })
+                                ) : React.createElement('div', { className: "flex items-center justify-between" },
+                                    React.createElement('img', { src: formData.photo, className: "w-12 h-12 object-cover rounded-xl border-2 border-white shadow-sm" }),
+                                    React.createElement('button', { type: 'button', onClick: () => setFormData({...formData, photo: null}), className: "p-2 bg-rose-50 text-rose-500 rounded-lg active-tap" }, React.createElement(Icon, { name: 'X', size: 14 }))
+                                )
+                            )
+                        ),
+                        React.createElement('div', { className: "pt-4 space-y-2" },
+                            React.createElement('button', { type: 'submit', className: "w-full py-5 bg-emerald-700 text-white rounded-[1.8rem] font-black uppercase text-[11px] shadow-lg active-tap" }, editingId ? "PERBARUI DATA" : "SIMPAN TRANSAKSI"),
+                            React.createElement('button', { type: 'button', onClick: () => setView('admin'), className: "w-full py-2 text-[10px] text-slate-400 font-black uppercase tracking-widest" }, "BATAL")
                         )
+                    )
+                ),
+
+                view === 'auth' && React.createElement('div', { className: "fixed inset-0 bg-emerald-950/95 backdrop-blur-md flex items-center justify-center p-6 z-[110]" },
+                    React.createElement('div', { className: "bg-white p-10 rounded-[3rem] w-full max-w-xs text-center shadow-2xl animate-fade" },
+                        React.createElement('h2', { className: "font-black text-xl mb-2 text-slate-800" }, "PIN Admin"),
+                        React.createElement('input', { 
+                            type: 'password', 
+                            className: "w-full p-4 bg-slate-100 rounded-2xl mb-8 text-center text-4xl font-black tracking-[0.5em] border-2 border-transparent focus:border-emerald-500 outline-none", 
+                            value: inputPass, 
+                            onChange: e => setInputPass(e.target.value), 
+                            autoFocus: true 
+                        }),
+                        React.createElement('button', { 
+                            onClick: () => {
+                                if(inputPass === ADMIN_PASSWORD) { setView('admin'); setInputPass(''); } 
+                                else { alert("PIN Salah!"); setInputPass(''); }
+                            },
+                            className: "w-full py-5 bg-emerald-700 text-white rounded-[1.5rem] font-black shadow-xl active-tap"
+                        }, "MASUK"),
+                        React.createElement('button', { onClick: () => setView('public'), className: "mt-8 text-[10px] font-black text-slate-400 uppercase tracking-widest" }, "BATAL")
                     )
                 )
             );
