@@ -31,7 +31,16 @@
         import ReactDOM from "https://esm.sh/react-dom@18.2.0/client";
         import * as LucideIcons from "https://esm.sh/lucide-react@0.263.1";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // Pastikan variabel ini terdefinisi di lingkungan hosting Anda
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "",
+            authDomain: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: "",
+            appId: ""
+        };
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -68,7 +77,11 @@
                         } else {
                             await signInAnonymously(auth);
                         }
-                    } catch (err) { console.error("Auth Error:", err); }
+                    } catch (err) { 
+                        console.error("Auth Error:", err);
+                        // Jika gagal auth, tetap matikan loading agar UI muncul
+                        setLoading(false); 
+                    }
                 };
                 initAuth();
                 const unsubscribe = onAuthStateChanged(auth, setUser);
@@ -94,16 +107,13 @@
                 const income = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 const expense = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 
-                // Hitung saldo spesifik metode (Admin Only)
                 const tunaiIn = transactions.filter(t => t.type === 'income' && t.method === 'tunai').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 const tunaiOut = transactions.filter(t => t.type === 'expense' && t.method === 'tunai').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 const rekIn = transactions.filter(t => t.type === 'income' && t.method === 'rekening').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 const rekOut = transactions.filter(t => t.type === 'expense' && t.method === 'rekening').reduce((acc, curr) => acc + Number(curr.amount), 0);
 
                 return { 
-                    income, 
-                    expense, 
-                    balance: income - expense,
+                    income, expense, balance: income - expense,
                     tunai: tunaiIn - tunaiOut,
                     rekening: rekIn - rekOut
                 };
@@ -139,12 +149,8 @@
             const handleEditClick = (t) => {
                 setEditingId(t.id);
                 setFormData({
-                    title: t.title,
-                    amount: t.amount,
-                    type: t.type,
-                    method: t.method || 'tunai',
-                    date: t.date,
-                    photo: t.photo || null
+                    title: t.title, amount: t.amount, type: t.type, method: t.method || 'tunai',
+                    date: t.date, photo: t.photo || null
                 });
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
@@ -175,7 +181,6 @@
             };
 
             const formatIDR = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
-
             const Icon = ({ name, ...props }) => React.createElement(LucideIcons[name] || LucideIcons.HelpCircle, props);
 
             if (loading) return (
@@ -186,7 +191,6 @@
             );
 
             return React.createElement('div', { className: "pb-20" },
-                // Photo Viewer Modal
                 showPhotoModal && React.createElement('div', { 
                     className: "fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4",
                     onClick: () => setShowPhotoModal(null)
@@ -194,7 +198,6 @@
                     React.createElement('img', { src: showPhotoModal, className: "max-w-full max-h-full rounded-lg shadow-2xl" })
                 ),
 
-                // Header
                 React.createElement('nav', { className: "bg-emerald-800 text-white p-5 sticky top-0 z-50 shadow-md" },
                     React.createElement('div', { className: "max-w-md mx-auto flex justify-between items-center" },
                         React.createElement('div', { onClick: handleLogoClick, className: "cursor-pointer" },
@@ -210,9 +213,8 @@
                     )
                 ),
 
-                // Main Content
                 React.createElement('main', { className: "max-w-md mx-auto p-5 space-y-6" },
-                    // Widget Jam dan Tanggal
+                    // Widget Jam dan Tanggal (Harus muncul di Publik & Admin)
                     React.createElement('div', { className: "bg-white p-6 rounded-[2.5rem] shadow-sm text-center border border-slate-100" },
                         React.createElement('p', { className: "text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1" }, 
                             currentTime.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -224,7 +226,6 @@
                         )
                     ),
 
-                    // Balance Card
                     React.createElement('div', { className: "bg-emerald-900 rounded-[3rem] p-8 text-white shadow-2xl relative overflow-hidden" },
                         React.createElement('p', { className: "text-[10px] font-extrabold uppercase tracking-[0.3em] text-emerald-300 mb-2 opacity-80" }, "Total Kas Masjid"),
                         React.createElement('h2', { className: "text-4xl font-extrabold mb-8 tracking-tighter" }, formatIDR(stats.balance)),
@@ -240,9 +241,8 @@
                         )
                     ),
 
-                    // Admin Form & Management
                     view === 'admin' ? React.createElement('div', { className: "space-y-8" },
-                        // Ringkasan Tunai vs Rekening (Admin Only)
+                        // Ringkasan Tunai & Rekening Khusus Admin
                         React.createElement('div', { className: "grid grid-cols-2 gap-4" },
                             React.createElement('div', { className: "bg-white p-5 rounded-[2rem] border border-emerald-100 shadow-sm" },
                                 React.createElement('div', { className: "flex items-center gap-2 mb-2" },
@@ -278,7 +278,6 @@
                                 React.createElement('input', { required: true, placeholder: "Keterangan", className: "w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border border-slate-100", value: formData.title, onChange: e => setFormData({...formData, title: e.target.value}) }),
                                 React.createElement('input', { required: true, type: 'number', placeholder: "Nominal", className: "w-full p-4 bg-slate-50 rounded-2xl text-lg font-extrabold border border-slate-100", value: formData.amount, onChange: e => setFormData({...formData, amount: e.target.value}) }),
                                 React.createElement('input', { required: true, type: 'date', className: "w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border border-slate-100", value: formData.date, onChange: e => setFormData({...formData, date: e.target.value}) }),
-                                
                                 React.createElement('div', { className: "relative group" },
                                     React.createElement('label', { className: "flex flex-col items-center justify-center w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-emerald-300 transition-colors bg-slate-50" },
                                         formData.photo ? 
@@ -293,12 +292,11 @@
                                         React.createElement('input', { type: 'file', accept: "image/*", className: "hidden", onChange: handleFileChange })
                                     )
                                 ),
-
                                 React.createElement('div', { className: "flex gap-3" },
                                     React.createElement('button', { type: 'button', onClick: () => setFormData({...formData, method: 'tunai'}), className: `flex-1 p-4 rounded-2xl border-2 text-[10px] font-extrabold uppercase flex items-center justify-center gap-2 ${formData.method === 'tunai' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-50 text-slate-300'}` }, React.createElement(Icon, { name: 'Banknote', size: 16 }), "Tunai"),
                                     React.createElement('button', { type: 'button', onClick: () => setFormData({...formData, method: 'rekening'}), className: `flex-1 p-4 rounded-2xl border-2 text-[10px] font-extrabold uppercase flex items-center justify-center gap-2 ${formData.method === 'rekening' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-50 text-slate-300'}` }, React.createElement(Icon, { name: 'CreditCard', size: 16 }), "Rekening")
                                 ),
-                                React.createElement('button', { type: 'submit', className: "w-full py-5 bg-emerald-700 text-white rounded-[2rem] text-[11px] font-extrabold uppercase shadow-xl" }, editingId ? "Update Data" : "Simpan Data")
+                                React.createElement('button', { type: 'submit', className: "w-full py-5 bg-emerald-700 text-white rounded-[2rem] text-[11px] font-extrabold uppercase shadow-xl" }, editingId ? "Update" : "Simpan")
                             )
                         ),
                         React.createElement('div', { className: "space-y-4" },
@@ -316,7 +314,6 @@
                             ))
                         )
                     ) : 
-                    // Public View
                     React.createElement('div', { className: "space-y-4" },
                         React.createElement('h3', { className: "text-[10px] font-extrabold uppercase tracking-[0.2em] px-4 text-slate-400" }, "Mutasi Terakhir"),
                         transactions.map(t => React.createElement('div', { key: t.id, className: "bg-white p-6 rounded-[2.5rem] border border-slate-100 flex justify-between items-center" },
@@ -334,7 +331,6 @@
                     )
                 ),
 
-                // Login Modal
                 view === 'auth' && React.createElement('div', { className: "fixed inset-0 z-[100] bg-emerald-950/90 backdrop-blur flex items-center justify-center p-6" },
                     React.createElement('div', { className: "bg-white w-full max-w-xs p-8 rounded-[3rem] text-center" },
                         React.createElement('div', { className: "w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4" }, React.createElement(Icon, { name: 'Lock', className: "text-emerald-600" })),
